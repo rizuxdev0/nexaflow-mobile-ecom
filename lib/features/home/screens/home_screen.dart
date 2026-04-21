@@ -8,6 +8,7 @@ import 'package:nexaflow_mobile/features/auth/providers/auth_provider.dart';
 import 'package:nexaflow_mobile/features/cart/providers/cart_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:nexaflow_mobile/core/widgets/brand_logo.dart';
+import 'package:nexaflow_mobile/core/widgets/shop_footer.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -27,7 +28,7 @@ class HomeScreen extends ConsumerWidget {
           SliverAppBar(
             pinned: true,
             expandedHeight: 80,
-            title: const BrandLogo(size: 32),
+            title: const BrandLogo(size: 28, showSlogan: true),
             actions: [
               IconButton(
                 icon: const Icon(Icons.favorite_outline_rounded),
@@ -174,7 +175,11 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 80)),
+
+          // Footer
+          const SliverToBoxAdapter(
+            child: ShopFooter(),
+          ),
         ],
       ),
     );
@@ -436,23 +441,37 @@ class _HeroCarouselState extends ConsumerState<HeroCarousel> {
       child: InkWell(
         onTap: () => context.push('/product/${p.id}'),
         borderRadius: BorderRadius.circular(24),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-              begin: Alignment.topLeft, end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            image: p.mainImage != null ? DecorationImage(
-              image: CachedNetworkImageProvider(p.mainImage!),
-              fit: BoxFit.cover,
-              opacity: 0.4,
-            ) : null,
-          ),
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Stack(
             children: [
+              // Background Gradient
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  ),
+                ),
+              ),
+              // Background Image with Error Handling
+              if (p.mainImage != null)
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: 0.4,
+                    child: CachedNetworkImage(
+                      imageUrl: p.mainImage!,
+                      fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => const SizedBox(),
+                    ),
+                  ),
+                ),
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(50)),
@@ -474,9 +493,12 @@ class _HeroCarouselState extends ConsumerState<HeroCarousel> {
             ],
           ),
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  ),
+),
+);
+}
 
   Widget _buildShimmerLoader() {
     return Container(

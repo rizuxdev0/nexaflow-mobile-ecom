@@ -5,6 +5,7 @@ import 'package:nexaflow_mobile/core/api/shop_providers.dart';
 import 'package:nexaflow_mobile/features/auth/providers/auth_provider.dart';
 import 'package:nexaflow_mobile/core/theme/theme_provider.dart';
 import 'package:nexaflow_mobile/core/widgets/brand_logo.dart';
+import 'package:nexaflow_mobile/core/widgets/shop_footer.dart';
 import 'package:nexaflow_mobile/features/settings/settings_provider.dart';
 
 class AccountScreen extends ConsumerWidget {
@@ -253,14 +254,8 @@ class AccountScreen extends ConsumerWidget {
                         ),
                       ]),
                       
-                      const SizedBox(height: 40),
-                      Center(
-                        child: Text(
-                          'Nexaflow v1.2.0 • Créé avec ❤️',
-                          style: TextStyle(color: Colors.grey.withOpacity(0.5), fontSize: 12),
-                        ),
-                      ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 24),
+                      const ShopFooter(),
                     ],
                   ),
                 ),

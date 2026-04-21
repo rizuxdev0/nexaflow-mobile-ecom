@@ -100,11 +100,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       await ApiClient().post('/shop/orders', data: {
         'customerId': customer?.id,
         'customerName': customer?.fullName ?? (customer?.email ?? 'Client'),
-        'customerEmail': customer?.email ?? '',
-        'customerPhone': _phoneCtrl.text,
-        'shippingAddress': _addressCtrl.text,
+        'customerEmail': (customer?.email?.isNotEmpty ?? false) ? customer!.email : null,
+        'customerPhone': _phoneCtrl.text.isNotEmpty ? _phoneCtrl.text : null,
+        'shippingAddress': _addressCtrl.text.isNotEmpty ? _addressCtrl.text : null,
         'paymentMethod': _paymentMethod,
-        'notes': _notesCtrl.text,
+        'notes': _notesCtrl.text.isNotEmpty ? _notesCtrl.text : null,
         'items': cart.items.map((i) => {
           'productId': i.product.id,
           'quantity': i.quantity,

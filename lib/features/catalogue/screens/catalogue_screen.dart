@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:nexaflow_mobile/core/api/shop_providers.dart';
 import 'package:nexaflow_mobile/core/models/models.dart';
+import 'package:nexaflow_mobile/core/widgets/shop_footer.dart';
 import 'package:nexaflow_mobile/features/cart/providers/cart_provider.dart';
 import 'package:nexaflow_mobile/features/compare/providers/compare_provider.dart';
 
@@ -68,57 +69,63 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
       ),
       body: Stack(
         children: [
-          Column(
-            children: [
+          CustomScrollView(
+            slivers: [
               // Categories filter
-              categoriesAsync.when(
-                data: (cats) => SizedBox(
-                  height: 50,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: cats.length + 1,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, idx) {
-                      if (idx == 0) {
+              SliverToBoxAdapter(
+                child: categoriesAsync.when(
+                  data: (cats) => SizedBox(
+                    height: 50,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: cats.length + 1,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, idx) {
+                        if (idx == 0) {
+                          return _CategoryChip(
+                            label: 'Tout',
+                            selected: _selectedCategoryId == null,
+                            onTap: () => setState(() => _selectedCategoryId = null),
+                          );
+                        }
+                        final cat = cats[idx - 1];
                         return _CategoryChip(
-                          label: 'Tout',
-                          selected: _selectedCategoryId == null,
-                          onTap: () => setState(() => _selectedCategoryId = null),
+                          label: cat.name,
+                          selected: _selectedCategoryId == cat.id,
+                          onTap: () => setState(() => _selectedCategoryId = cat.id),
                         );
-                      }
-                      final cat = cats[idx - 1];
-                      return _CategoryChip(
-                        label: cat.name,
-                        selected: _selectedCategoryId == cat.id,
-                        onTap: () => setState(() => _selectedCategoryId = cat.id),
-                      );
-                    },
+                      },
+                    ),
                   ),
+                  loading: () => const SizedBox(height: 50),
+                  error: (_, __) => const SizedBox(height: 50),
                 ),
-                loading: () => const SizedBox(height: 50),
-                error: (_, __) => const SizedBox(height: 50),
               ),
               // Products grid
-              Expanded(
-                child: productsAsync.when(
-                  data: (products) => products.isEmpty
-                      ? const Center(child: Text('Aucun produit trouvé'))
-                      : GridView.builder(
-                          padding: const EdgeInsets.all(16),
+              productsAsync.when(
+                data: (products) => products.isEmpty
+                    ? const SliverFillRemaining(child: Center(child: Text('Aucun produit trouvé')))
+                    : SliverPadding(
+                        padding: const EdgeInsets.all(16),
+                        sliver: SliverGrid(
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
                             childAspectRatio: 0.65,
                             crossAxisSpacing: 12,
                             mainAxisSpacing: 12,
                           ),
-                          itemCount: products.length,
-                          itemBuilder: (context, idx) => _ProductCard(product: products[idx]),
+                          delegate: SliverChildBuilderDelegate(
+                            (context, idx) => _ProductCard(product: products[idx]),
+                            childCount: products.length,
+                          ),
                         ),
-                  loading: () => _buildSkeleton(),
-                  error: (e, _) => Center(child: Text('Erreur: $e')),
-                ),
+                      ),
+                loading: () => SliverToBoxAdapter(child: _buildSkeleton()),
+                error: (e, _) => SliverFillRemaining(child: Center(child: Text('Erreur: $e'))),
               ),
+              // Footer
+              const SliverToBoxAdapter(child: ShopFooter()),
             ],
           ),
           if (compareList.isNotEmpty)
@@ -167,16 +174,20 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     );
   }
 
-  Widget _buildSkeleton() => GridView.builder(
+  Widget _buildSkeleton() => Padding(
     padding: const EdgeInsets.all(16),
-    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: 2, childAspectRatio: 0.65, crossAxisSpacing: 12, mainAxisSpacing: 12,
-    ),
-    itemCount: 6,
-    itemBuilder: (_, __) => Shimmer.fromColors(
-      baseColor: Colors.grey.shade200,
-      highlightColor: Colors.grey.shade100,
-      child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20))),
+    child: GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2, childAspectRatio: 0.65, crossAxisSpacing: 12, mainAxisSpacing: 12,
+      ),
+      itemCount: 6,
+      itemBuilder: (_, __) => Shimmer.fromColors(
+        baseColor: Colors.grey.shade200,
+        highlightColor: Colors.grey.shade100,
+        child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20))),
+      ),
     ),
   );
 }
