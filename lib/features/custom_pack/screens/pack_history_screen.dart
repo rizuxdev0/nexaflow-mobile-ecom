@@ -20,72 +20,132 @@ class PackHistoryScreen extends ConsumerWidget {
         title: const Text('Historique des Packs'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => ref.read(packHistoryProvider.notifier).fetchHistory(),
+          ),
+        ],
       ),
-      body: history.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.history_edu, size: 64, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  const Text('Aucun pack créé', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  const SizedBox(height: 8),
-                  const Text('Vos packs sur-mesure apparaîtront ici.', style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: history.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
-              itemBuilder: (context, index) {
-                final pack = history[index];
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade200),
-                    boxShadow: [
-                      if (Theme.of(context).brightness == Brightness.light)
-                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2)),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(pack.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text(DateFormat('dd/MM/yyyy').format(pack.createdAt), style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                        ],
-                      ),
-                      const Divider(height: 24),
-                      ...pack.items.map((item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Row(
+      body: history.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(child: Text('Erreur: $err')),
+        data: (requests) => requests.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.history_edu, size: 64, color: Colors.grey.shade400),
+                    const SizedBox(height: 16),
+                    const Text('Aucune demande trouvée', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    const SizedBox(height: 8),
+                    const Text('Vos demandes de packs apparaîtront ici.', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: requests.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  final pack = requests[index];
+                  
+                  final Color statusColor = pack.status == 'approved' ? Colors.green : 
+                                      pack.status == 'rejected' ? Colors.red :
+                                      pack.status == 'converted' ? Colors.blue : 
+                                      Colors.orange;
+                                      
+                  final String statusLabel = pack.status == 'approved' ? 'Approuvé' :
+                                       pack.status == 'rejected' ? 'Refusé' :
+                                       pack.status == 'converted' ? 'Commandé' :
+                                       'En attente';
+
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.grey.shade200),
+                      boxShadow: [
+                        if (Theme.of(context).brightness == Brightness.light)
+                          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2)),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('${item.quantity}×', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(item.product.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                            Text(_formatAmount(item.product.price * item.quantity), style: const TextStyle(fontWeight: FontWeight.w600)),
+                            Text('Demande #${pack.id.substring(0, 8).toUpperCase()}', 
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: statusColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(statusLabel, 
+                                style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10)),
+                            ),
                           ],
                         ),
-                      )),
-                      const Divider(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Total après réduction', style: TextStyle(color: Colors.grey)),
-                          Text(_formatAmount(pack.finalPrice), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: primaryColor)),
+                        const SizedBox(height: 4),
+                        Text(DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(pack.createdAt)), 
+                          style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                        const Divider(height: 24),
+                        ...pack.items.map((item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Row(
+                            children: [
+                              Text('${item.quantity}×', style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(item.productName, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                              Text(_formatAmount(item.unitPrice * item.quantity), style: const TextStyle(fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        )),
+                        const Divider(height: 24),
+                        if (pack.adminNote != null && pack.adminNote!.isNotEmpty) ...[
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue.withOpacity(0.1)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(Icons.info_outline, size: 14, color: Colors.blue),
+                                    SizedBox(width: 6),
+                                    Text('Réponse de la boutique:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue)),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(pack.adminNote!, style: const TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                         ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Total estimé', style: TextStyle(color: Colors.grey)),
+                            Text(_formatAmount(pack.discountedTotal), 
+                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: primaryColor)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      ),
     );
   }
 }

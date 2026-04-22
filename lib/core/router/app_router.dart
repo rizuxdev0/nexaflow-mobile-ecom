@@ -19,6 +19,9 @@ import '../../features/returns/screens/returns_history_screen.dart';
 import '../../features/returns/screens/return_request_screen.dart';
 import '../../features/chat/screens/chat_screen.dart';
 import '../../features/help/screens/help_screen.dart';
+import '../../features/loyalty/screens/loyalty_screen.dart';
+import '../../features/notifications/screens/notifications_screen.dart';
+import '../../features/account/screens/edit_profile_screen.dart';
 import 'package:nexaflow_mobile/features/vendor/screens/become_vendor_screen.dart';
 import 'package:nexaflow_mobile/features/vendor/screens/pricing_screen.dart';
 import 'package:nexaflow_mobile/features/vendor/screens/subscription_checkout_screen.dart';
@@ -36,7 +39,7 @@ GoRouter buildRouter(WidgetRef ref) {
       final auth = ref.read(authProvider);
       if (auth.isLoading) return null;
       // Protected routes
-      final protectedPaths = ['/checkout', '/compte', '/commandes', '/chat', '/custom-pack', '/pack-history', '/returns', '/become-vendor', '/subscription/checkout'];
+      final protectedPaths = ['/checkout', '/compte', '/commandes', '/chat', '/custom-pack', '/pack-history', '/returns', '/become-vendor', '/subscription/checkout', '/notifications', '/edit-profile'];
       final isProtected = protectedPaths.any((p) => state.matchedLocation.startsWith(p));
       if (isProtected && !auth.isAuthenticated) return '/connexion';
       return null;
@@ -55,8 +58,11 @@ GoRouter buildRouter(WidgetRef ref) {
           GoRoute(path: '/chat', builder: (_, __) => const ChatScreen()),
           GoRoute(path: '/compte', builder: (_, __) => const AccountScreen()),
           GoRoute(path: '/help', name: 'help', builder: (_, __) => const HelpScreen()),
+          GoRoute(path: '/loyalty', builder: (_, __) => const LoyaltyScreen()),
+          GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
         ],
       ),
+      GoRoute(path: '/edit-profile', builder: (_, __) => const EditProfileScreen()),
       GoRoute(path: '/connexion', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/product/:id', builder: (_, state) => ProductDetailScreen(productId: state.pathParameters['id']!)),
       GoRoute(path: '/checkout', builder: (_, __) => const CheckoutScreen()),

@@ -172,12 +172,19 @@ class CustomPackScreen extends ConsumerWidget {
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: () {
-                              final name = 'Pack sur-mesure (${DateFormat('dd/MM').format(DateTime.now())})';
-                              ref.read(packHistoryProvider.notifier).savePack(name, draftItems);
-                              // Just saving to history and showing success
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pack validé et ajouté à votre historique !')));
-                              ref.read(customPackDraftProvider.notifier).clearPack();
+                            onPressed: () async {
+                              final success = await ref.read(packHistoryProvider.notifier).submitRequest(draftItems);
+                              if (success) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demande de pack envoyée avec succès !')));
+                                  ref.read(customPackDraftProvider.notifier).clearPack();
+                                  Navigator.pop(context); // Go back after success
+                                }
+                              } else {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de l\'envoi de la demande.')));
+                                }
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: primaryColor,
@@ -185,7 +192,7 @@ class CustomPackScreen extends ConsumerWidget {
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
                             ),
-                            child: const Text('Commander ce Pack', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            child: const Text('Soumettre ma Demande', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           ),
                         ),
                       ],

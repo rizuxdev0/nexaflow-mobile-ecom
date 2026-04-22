@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:nexaflow_mobile/core/api/api_client.dart';
 import 'package:nexaflow_mobile/core/models/models.dart';
-import 'package:uuid/uuid.dart';
+import 'package:nexaflow_mobile/features/auth/providers/auth_provider.dart';
 
 class CustomPackItem {
   final Product product;
@@ -14,34 +16,6 @@ class CustomPackItem {
       quantity: quantity ?? this.quantity,
     );
   }
-}
-
-class CustomPack {
-  final String id;
-  final String name;
-  final List<CustomPackItem> items;
-  final DateTime createdAt;
-
-  CustomPack({
-    required this.id,
-    required this.name,
-    required this.items,
-    required this.createdAt,
-  });
-
-  double get totalPrice {
-    return items.fold(0, (sum, item) => sum + (item.product.price * item.quantity));
-  }
-
-  double get discountAmount {
-    // Basic discount logic: 5% for 2+ items, 10% for 4+ items
-    final totalItems = items.fold<int>(0, (sum, item) => sum + item.quantity);
-    if (totalItems >= 4) return totalPrice * 0.10;
-    if (totalItems >= 2) return totalPrice * 0.05;
-    return 0;
-  }
-
-  double get finalPrice => totalPrice - discountAmount;
 }
 
 class CustomPackDraftNotifier extends StateNotifier<List<CustomPackItem>> {
@@ -84,20 +58,91 @@ final customPackDraftProvider = StateNotifierProvider<CustomPackDraftNotifier, L
   return CustomPackDraftNotifier();
 });
 
-class PackHistoryNotifier extends StateNotifier<List<CustomPack>> {
-  PackHistoryNotifier() : super([]);
+class PackHistoryNotifier extends StateNotifier<AsyncValue<List<CustomPackRequest>>> {
+  final ApiClient _api;
+  final String? _customerId;
+  final String? _customerName;
+  final String? _customerEmail;
 
-  void savePack(String name, List<CustomPackItem> items) {
-    final pack = CustomPack(
-      id: const Uuid().v4(),
-      name: name,
-      items: items,
-      createdAt: DateTime.now(),
-    );
-    state = [pack, ...state];
+  PackHistoryNotifier(this._api, this._customerId, this._customerName, this._customerEmail) : super(const AsyncValue.loading()) {
+    if (_customerId != null) {
+      fetchHistory();
+    }
+  }
+
+  Future<void> fetchHistory() async {
+    if (_customerId == null) return;
+    state = const AsyncValue.loading();
+    try {
+      final response = await _api.get('/custom-packs/requests', params: {'customerId': _customerId});
+      final responseData = response.data as Map<String, dynamic>;
+      
+      // The interceptor wraps in 'data', and the controller result with pagination also has 'data'
+      final outerData = responseData['data'] as Map<String, dynamic>;
+      final List<dynamic> requestsRaw = outerData['data'] ?? [];
+      
+      final list = requestsRaw.map((e) => CustomPackRequest.fromJson(e as Map<String, dynamic>)).toList();
+      state = AsyncValue.data(list);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<bool> submitRequest(List<CustomPackItem> draftItems, {String? note}) async {
+    if (_customerId == null) return false;
+    
+    try {
+      double originalTotal = draftItems.fold(0, (sum, item) => sum + (item.product.price * item.quantity));
+      int totalItems = draftItems.fold<int>(0, (sum, item) => sum + item.quantity);
+      
+      String discountType = 'percentage';
+      double discountValue = 0;
+      if (totalItems >= 4) discountValue = 10;
+      else if (totalItems >= 2) discountValue = 5;
+
+      double discountedTotal = originalTotal;
+      if (discountType == 'percentage') {
+        discountedTotal = originalTotal * (1 - discountValue / 100);
+      }
+      double savings = originalTotal - discountedTotal;
+
+      final payload = {
+        'customerId': _customerId,
+        'customerName': _customerName,
+        'customerEmail': _customerEmail,
+        'items': draftItems.map((it) => {
+          'productId': it.product.id,
+          'productName': it.product.name,
+          'sku': it.product.sku,
+          'image': it.product.mainImage,
+          'quantity': it.quantity,
+          'unitPrice': it.product.price,
+        }).toList(),
+        'originalTotal': originalTotal,
+        'discountType': discountType,
+        'discountValue': discountValue,
+        'discountedTotal': discountedTotal,
+        'savings': savings,
+        'customerNote': note,
+      };
+
+      await _api.post('/custom-packs/requests', data: payload);
+      await fetchHistory();
+      return true;
+    } catch (e) {
+      debugPrint("Error submitting pack request: $e");
+      return false;
+    }
   }
 }
 
-final packHistoryProvider = StateNotifierProvider<PackHistoryNotifier, List<CustomPack>>((ref) {
-  return PackHistoryNotifier();
+final packHistoryProvider = StateNotifierProvider<PackHistoryNotifier, AsyncValue<List<CustomPackRequest>>>((ref) {
+  final api = ref.watch(apiClientProvider);
+  final auth = ref.watch(authProvider);
+  return PackHistoryNotifier(
+    api, 
+    auth.customer?.id, 
+    auth.customer?.fullName, 
+    auth.customer?.email
+  );
 });

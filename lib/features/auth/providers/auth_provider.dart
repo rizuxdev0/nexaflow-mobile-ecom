@@ -35,11 +35,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final savedCustomer = await AuthStorage.getCustomer();
       if (savedCustomer != null) {
         state = AuthState(customer: Customer.fromJson(savedCustomer));
+        // Refresh from server to get latest points/photo
+        await checkAuth();
       } else {
         state = const AuthState();
       }
     } catch (_) {
       state = const AuthState();
+    }
+  }
+
+  Future<void> checkAuth() async {
+    try {
+      final response = await _api.get('/customers/me');
+      final responseData = response.data as Map<String, dynamic>;
+      final actualData = responseData.containsKey('data') ? responseData['data'] : responseData;
+      final customer = Customer.fromJson(actualData as Map<String, dynamic>);
+      await AuthStorage.saveCustomer(customer.toJson());
+      state = state.copyWith(customer: customer);
+    } catch (e) {
+      print('CheckAuth error: $e');
     }
   }
 
@@ -51,16 +66,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'password': password,
         'source': 'ecommerce',
       });
+      
       final rawResponse = response.data as Map<String, dynamic>;
       final data = rawResponse.containsKey('data') ? rawResponse['data'] as Map<String, dynamic> : rawResponse;
       final token = data['token'] as String;
-      final userJson = data['user'] as Map<String, dynamic>;
-      final customer = Customer.fromJson(userJson);
-
+      
       await AuthStorage.saveToken(token);
-      await AuthStorage.saveCustomer(customer.toJson());
-
-      state = AuthState(customer: customer);
+      
+      // Fetch the REAL customer record (loyalty, profile pic, etc.)
+      await checkAuth();
+      
+      state = state.copyWith(isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: 'Email ou mot de passe incorrect');
     }
@@ -83,13 +99,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final rawResponse = response.data as Map<String, dynamic>;
       final data = rawResponse.containsKey('data') ? rawResponse['data'] as Map<String, dynamic> : rawResponse;
       final token = data['token'] as String;
-      final userJson = data['user'] as Map<String, dynamic>;
-      final customer = Customer.fromJson(userJson);
 
       await AuthStorage.saveToken(token);
-      await AuthStorage.saveCustomer(customer.toJson());
+      
+      // Wait a bit for sync if needed, but usually it's immediate
+      await checkAuth();
 
-      state = AuthState(customer: customer);
+      state = state.copyWith(isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: 'Erreur lors de l\'inscription');
     }

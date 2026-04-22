@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/models/models.dart';
 import '../../features/auth/providers/auth_provider.dart';
+import '../models/loyalty.dart';
 
 /// Products provider
 final productsProvider = FutureProvider.family<List<Product>, String>((ref, queryStr) async {
@@ -192,5 +193,111 @@ final storeConfigProvider = FutureProvider<StoreConfig?>((ref) async {
   } catch (e) {
     debugPrint("Erreur chargement store config: $e");
     return null;
+  }
+});
+
+/// Testimonials provider
+final testimonialsProvider = FutureProvider<List<Testimonial>>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  try {
+    final response = await api.get('/testimonials/active');
+    final data = response.data;
+    List<dynamic> list = [];
+    if (data is Map && data.containsKey('data')) {
+      list = data['data'] as List<dynamic>;
+    } else if (data is List) {
+      list = data;
+    }
+    return list.map((e) => Testimonial.fromJson(e as Map<String, dynamic>)).toList();
+  } catch (e) {
+    debugPrint("Erreur chargement testimonials: $e");
+    return [];
+  }
+});
+
+/// Submit testimonial function
+final submitTestimonialProvider = Provider((ref) {
+  return (int rating, String content, String? city) async {
+    final api = ref.read(apiClientProvider);
+    final auth = ref.read(authProvider);
+    
+    if (!auth.isAuthenticated) return false;
+
+    try {
+      final response = await api.post('/testimonials', data: {
+        'customerName': auth.customer!.fullName,
+        'rating': rating,
+        'content': content,
+        'city': city,
+      });
+      
+      return response.statusCode == 201;
+    } catch (e) {
+      debugPrint("Erreur soumission témoignage: $e");
+      return false;
+    }
+  };
+});
+
+/// Loyalty Rewards
+final loyaltyRewardsProvider = FutureProvider<List<LoyaltyReward>>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  try {
+    final response = await api.get('/loyalty/rewards');
+    final data = response.data;
+    List<dynamic> list = [];
+    if (data is Map && data.containsKey('data')) {
+      list = data['data'] as List<dynamic>;
+    } else if (data is List) {
+      list = data;
+    }
+    return list.map((e) => LoyaltyReward.fromJson(e as Map<String, dynamic>)).toList();
+  } catch (e) {
+    debugPrint("Erreur chargement rewards: $e");
+    return [];
+  }
+});
+
+/// Loyalty Transactions
+final loyaltyTransactionsProvider = FutureProvider<List<LoyaltyTransaction>>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  final auth = ref.watch(authProvider);
+  final customerId = auth.customer?.id;
+  if (customerId == null) return [];
+
+  try {
+    final response = await api.get('/loyalty/transactions', params: {'customerId': customerId});
+    final data = response.data;
+    List<dynamic> list = [];
+    if (data is Map && data.containsKey('data')) {
+      list = data['data'] as List<dynamic>;
+    } else if (data is List) {
+      list = data;
+    }
+    return list.map((e) => LoyaltyTransaction.fromJson(e as Map<String, dynamic>)).toList();
+  } catch (e) {
+    debugPrint("Erreur chargement loyalty transactions: $e");
+    return [];
+  }
+});
+
+/// Redeem Loyalty Reward
+final redeemRewardProvider = FutureProvider.family<bool, String>((ref, rewardId) async {
+  final api = ref.watch(apiClientProvider);
+  final auth = ref.watch(authProvider);
+  final customerId = auth.customer?.id;
+  if (customerId == null) throw Exception('Utilisateur non connecté');
+
+  try {
+    await api.post('/loyalty/redeem', data: {
+      'customerId': customerId,
+      'rewardId': rewardId,
+    });
+    ref.invalidate(loyaltyTransactionsProvider);
+    ref.invalidate(authProvider); 
+    return true;
+  } catch (e) {
+    debugPrint("Erreur redeem reward: $e");
+    throw Exception('Impossible d\'échanger cette récompense');
   }
 });

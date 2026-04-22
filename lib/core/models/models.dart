@@ -174,6 +174,7 @@ class Customer {
   final String? phone;
   final String? address;
   final String? city;
+  final String? profilePicture;
   final String role;
   final int loyaltyPoints;
   final String loyaltyTier;
@@ -187,6 +188,7 @@ class Customer {
     this.phone,
     this.address,
     this.city,
+    this.profilePicture,
     required this.role,
     required this.loyaltyPoints,
     required this.loyaltyTier,
@@ -203,6 +205,7 @@ class Customer {
     phone: json['phone'] as String?,
     address: json['address'] as String?,
     city: json['city'] as String?,
+    profilePicture: json['profilePicture'] as String?,
     role: json['role'] is Map
         ? ((json['role'] as Map)['name'] ?? 'customer').toString()
         : (json['role'] as String? ?? 'customer'),
@@ -219,6 +222,7 @@ class Customer {
     'phone': phone,
     'address': address,
     'city': city,
+    'profilePicture': profilePicture,
     'role': role,
     'loyaltyPoints': loyaltyPoints,
     'loyaltyTier': loyaltyTier,
@@ -391,4 +395,117 @@ class StoreConfig {
       identity: (data['identity'] as Map<String, dynamic>?) ?? {},
     );
   }
+}
+
+/// Testimonial model
+class Testimonial {
+  final String id;
+  final String customerName;
+  final String? city;
+  final int rating;
+  final String content;
+  final String? avatar;
+  final String createdAt;
+
+  const Testimonial({
+    required this.id,
+    required this.customerName,
+    this.city,
+    required this.rating,
+    required this.content,
+    this.avatar,
+    required this.createdAt,
+  });
+
+  factory Testimonial.fromJson(Map<String, dynamic> json) => Testimonial(
+    id: json['id'] as String,
+    customerName: json['customerName'] as String,
+    city: json['city'] as String?,
+    rating: _safeParseInt(json['rating'], defaultValue: 5),
+    content: json['content'] as String,
+    avatar: UrlUtils.fixLocalhost(json['avatar'] as String?),
+    createdAt: json['createdAt'] as String? ?? '',
+  );
+}
+
+/// Custom Pack Request model
+class CustomPackRequest {
+  final String id;
+  final String customerId;
+  final String customerName;
+  final String customerEmail;
+  final List<CustomPackRequestItem> items;
+  final double originalTotal;
+  final String discountType; // 'percentage' | 'fixed'
+  final double discountValue;
+  final double discountedTotal;
+  final double savings;
+  final String status; // 'pending' | 'approved' | 'rejected' | 'converted'
+  final String? adminNote;
+  final String? customerNote;
+  final String createdAt;
+
+  const CustomPackRequest({
+    required this.id,
+    required this.customerId,
+    required this.customerName,
+    required this.customerEmail,
+    required this.items,
+    required this.originalTotal,
+    required this.discountType,
+    required this.discountValue,
+    required this.discountedTotal,
+    required this.savings,
+    required this.status,
+    this.adminNote,
+    this.customerNote,
+    required this.createdAt,
+  });
+
+  factory CustomPackRequest.fromJson(Map<String, dynamic> json) => CustomPackRequest(
+    id: json['id'] as String,
+    customerId: json['customerId'] as String,
+    customerName: json['customerName'] as String? ?? '',
+    customerEmail: json['customerEmail'] as String? ?? '',
+    items: (json['items'] as List<dynamic>?)
+            ?.map((e) => CustomPackRequestItem.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [],
+    originalTotal: _safeParseDouble(json['originalTotal']),
+    discountType: json['discountType'] as String? ?? 'percentage',
+    discountValue: _safeParseDouble(json['discountValue']),
+    discountedTotal: _safeParseDouble(json['discountedTotal']),
+    savings: _safeParseDouble(json['savings']),
+    status: json['status'] as String? ?? 'pending',
+    adminNote: json['adminNote'] as String?,
+    customerNote: json['customerNote'] as String?,
+    createdAt: json['createdAt'] as String? ?? '',
+  );
+}
+
+class CustomPackRequestItem {
+  final String productId;
+  final String productName;
+  final String? image;
+  final String sku;
+  final int quantity;
+  final double unitPrice;
+
+  const CustomPackRequestItem({
+    required this.productId,
+    required this.productName,
+    this.image,
+    required this.sku,
+    required this.quantity,
+    required this.unitPrice,
+  });
+
+  factory CustomPackRequestItem.fromJson(Map<String, dynamic> json) => CustomPackRequestItem(
+    productId: json['productId'] as String? ?? '',
+    productName: json['productName'] as String? ?? '',
+    image: UrlUtils.fixLocalhost(json['image'] as String?),
+    sku: json['sku'] as String? ?? '',
+    quantity: _safeParseInt(json['quantity'], defaultValue: 1),
+    unitPrice: _safeParseDouble(json['unitPrice']),
+  );
 }

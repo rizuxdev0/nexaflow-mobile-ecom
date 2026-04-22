@@ -9,6 +9,7 @@ import 'package:nexaflow_mobile/features/cart/providers/cart_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:nexaflow_mobile/core/widgets/brand_logo.dart';
 import 'package:nexaflow_mobile/core/widgets/shop_footer.dart';
+import 'package:nexaflow_mobile/core/api/notification_providers.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -30,6 +31,26 @@ class HomeScreen extends ConsumerWidget {
             expandedHeight: 80,
             title: const BrandLogo(size: 28, showSlogan: true),
             actions: [
+              Consumer(builder: (_, ref, __) {
+                final unreadCount = ref.watch(unreadNotificationsCountProvider);
+                return Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.notifications_none_rounded),
+                      onPressed: () => context.push('/notifications'),
+                    ),
+                    if (unreadCount > 0)
+                      Positioned(
+                        right: 8, top: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                          child: Text('$unreadCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                  ],
+                );
+              }),
               IconButton(
                 icon: const Icon(Icons.favorite_outline_rounded),
                 onPressed: () => context.push('/favoris'),
@@ -175,6 +196,11 @@ class HomeScreen extends ConsumerWidget {
             ),
           ),
 
+
+          // Testimonials Section
+          const SliverToBoxAdapter(
+            child: _TestimonialsSlider(),
+          ),
 
           // Footer
           const SliverToBoxAdapter(
@@ -335,6 +361,314 @@ class _PromotionBanner extends StatelessWidget {
     } catch (_) {
       return Colors.blue;
     }
+  }
+}
+
+class _TestimonialsSlider extends ConsumerWidget {
+  const _TestimonialsSlider();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final testimonialsAsync = ref.watch(testimonialsProvider);
+    final auth = ref.watch(authProvider);
+    final theme = Theme.of(context);
+
+    return testimonialsAsync.when(
+      data: (testimonials) {
+        // We show the section if there are testimonials OR if the user is logged in (to invite them to share)
+        if (testimonials.isEmpty && !auth.isAuthenticated) return const SizedBox();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 32, 20, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Ce que disent nos clients 💬', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text('Votre satisfaction est notre plus grande réussite', 
+                          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600)),
+                      ],
+                    ),
+                  ),
+                  if (auth.isAuthenticated)
+                    TextButton.icon(
+                      onPressed: () => _showTestimonialForm(context, ref),
+                      icon: const Icon(Icons.add_comment_rounded, size: 18),
+                      label: const Text('Donner mon avis', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: TextButton.styleFrom(foregroundColor: const Color(0xFF6366F1)),
+                    ),
+                ],
+              ),
+            ),
+            if (testimonials.isEmpty)
+              _buildEmptyTestimonialsPlaceholder(context)
+            else
+              SizedBox(
+                height: 180,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: testimonials.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 16),
+                  itemBuilder: (context, index) => _TestimonialCard(testimonial: testimonials[index]),
+                ),
+              ),
+            const SizedBox(height: 32),
+          ],
+        );
+      },
+      loading: () => const SizedBox(height: 100),
+      error: (_, __) => const SizedBox(),
+    );
+  }
+
+  Widget _buildEmptyTestimonialsPlaceholder(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.chat_bubble_outline_rounded, size: 48, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text('Soyez le premier à partager votre expérience !', textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTestimonialForm(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _TestimonialFormBottomSheet(),
+    );
+  }
+}
+
+class _TestimonialFormBottomSheet extends ConsumerStatefulWidget {
+  const _TestimonialFormBottomSheet();
+
+  @override
+  ConsumerState<_TestimonialFormBottomSheet> createState() => _TestimonialFormBottomSheetState();
+}
+
+class _TestimonialFormBottomSheetState extends ConsumerState<_TestimonialFormBottomSheet> {
+  final _contentCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
+  int _rating = 5;
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _contentCtrl.dispose();
+    _cityCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Votre avis compte 🌟', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Partagez votre expérience avec la communauté NexaFlow.', 
+            style: TextStyle(color: Colors.grey.shade500)),
+          const SizedBox(height: 24),
+          
+          // Rating
+          const Text('Comment évalueriez-vous notre service ?', 
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (index) => IconButton(
+              onPressed: () => setState(() => _rating = index + 1),
+              icon: Icon(
+                _rating > index ? Icons.star_rounded : Icons.star_outline_rounded,
+                size: 40,
+                color: _rating > index ? const Color(0xFFF59E0B) : Colors.grey.shade300,
+              ),
+            )),
+          ),
+          const SizedBox(height: 24),
+
+          // City (Optional)
+          TextField(
+            controller: _cityCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Votre ville (Optionnel)',
+              hintText: 'Ex: Paris, Abidjan...',
+              prefixIcon: Icon(Icons.location_on_outlined),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Content
+          TextField(
+            controller: _contentCtrl,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Votre message',
+              hintText: 'Racontez-nous votre expérience...',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton(
+              onPressed: _submitting ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: _submitting 
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text('Envoyer mon témoignage', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (_contentCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez écrire un message.')));
+      return;
+    }
+
+    setState(() => _submitting = true);
+    
+    final success = await ref.read(submitTestimonialProvider)(
+      _rating,
+      _contentCtrl.text,
+      _cityCtrl.text.isEmpty ? null : _cityCtrl.text,
+    );
+
+    if (mounted) {
+      setState(() => _submitting = false);
+      if (success) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Merci ! Votre témoignage a été envoyé pour modération. ✨'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erreur lors de l\'envoi. Réessayez.')));
+      }
+    }
+  }
+}
+
+class _TestimonialCard extends StatelessWidget {
+  final Testimonial testimonial;
+  const _TestimonialCard({required this.testimonial});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      width: 280,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.grey.shade100),
+        boxShadow: isDark ? [] : [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 8))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: const Color(0xFF6366F1).withOpacity(0.1),
+                backgroundImage: testimonial.avatar != null ? NetworkImage(testimonial.avatar!) : null,
+                child: testimonial.avatar == null 
+                  ? Text(testimonial.customerName[0].toUpperCase(), 
+                      style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.bold, fontSize: 12))
+                  : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(testimonial.customerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    if (testimonial.city != null)
+                      Text(testimonial.city!, style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                  ],
+                ),
+              ),
+              Row(
+                children: List.generate(5, (index) => Icon(
+                  Icons.star_rounded, 
+                  size: 14, 
+                  color: index < testimonial.rating ? const Color(0xFFF59E0B) : Colors.grey.shade300
+                )),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: Text(
+              '"${testimonial.content}"',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontStyle: FontStyle.italic,
+                color: isDark ? Colors.white70 : Colors.grey.shade700,
+                height: 1.4,
+              ),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

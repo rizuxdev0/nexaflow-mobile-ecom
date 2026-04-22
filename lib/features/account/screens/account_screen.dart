@@ -7,6 +7,7 @@ import 'package:nexaflow_mobile/core/theme/theme_provider.dart';
 import 'package:nexaflow_mobile/core/widgets/brand_logo.dart';
 import 'package:nexaflow_mobile/core/widgets/shop_footer.dart';
 import 'package:nexaflow_mobile/features/settings/settings_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class AccountScreen extends ConsumerWidget {
   const AccountScreen({super.key});
@@ -99,18 +100,37 @@ class AccountScreen extends ConsumerWidget {
                     Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                          child: CircleAvatar(
-                            radius: 42,
-                            backgroundColor: Colors.indigo.shade100,
-                            child: Text(
-                              customer.fullName.isNotEmpty ? customer.fullName[0].toUpperCase() : '?',
-                              style: const TextStyle(color: Color(0xFF4F46E5), fontSize: 32, fontWeight: FontWeight.bold),
+                      Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          GestureDetector(
+                            onTap: () => context.push('/edit-profile'),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                              child: CircleAvatar(
+                                radius: 42,
+                                backgroundColor: Colors.indigo.shade100,
+                                backgroundImage: (customer.profilePicture != null && customer.profilePicture!.isNotEmpty)
+                                    ? CachedNetworkImageProvider(customer.profilePicture!)
+                                    : null,
+                                child: (customer.profilePicture == null || customer.profilePicture!.isEmpty)
+                                    ? Text(
+                                        customer.fullName.isNotEmpty ? customer.fullName[0].toUpperCase() : '?',
+                                        style: const TextStyle(color: Color(0xFF4F46E5), fontSize: 32, fontWeight: FontWeight.bold),
+                                      )
+                                    : null,
+                              ),
                             ),
                           ),
-                        ),
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            margin: const EdgeInsets.only(right: 6, bottom: 6),
+                            decoration: BoxDecoration(color: const Color(0xFF6366F1), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                            child: const Icon(Icons.edit, size: 14, color: Colors.white),
+                          ),
+                        ],
+                      ),
                         const SizedBox(height: 12),
                         Text(
                           customer.fullName,
@@ -149,7 +169,7 @@ class AccountScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Loyalty Card
-                      _buildLoyaltyCard(customer, isDark),
+                      _buildLoyaltyCard(context, customer, isDark),
                       const SizedBox(height: 24),
 
                       // Quick Actions Row
@@ -267,7 +287,7 @@ class AccountScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLoyaltyCard(customer, bool isDark) {
+  Widget _buildLoyaltyCard(BuildContext context, dynamic customer, bool isDark) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -309,7 +329,7 @@ class AccountScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               TextButton(
-                onPressed: () {},
+                onPressed: () => context.push('/loyalty'),
                 child: const Text('Avantages', style: TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.bold)),
               ),
             ],
