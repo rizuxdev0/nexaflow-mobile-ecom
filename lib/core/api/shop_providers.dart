@@ -5,32 +5,111 @@ import '../../core/models/models.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../models/loyalty.dart';
 
-/// Products provider
-final productsProvider = FutureProvider.family<List<Product>, String>((ref, queryStr) async {
-  final api = ref.watch(apiClientProvider);
-  try {
-    final params = queryStr.isEmpty ? null : Uri.splitQueryString(queryStr);
-    final response = await api.get('/shop/products', params: params);
-    final data = response.data;
-    List<dynamic> list = [];
-    if (data is Map) {
-      final content = data['data']; // Unwrap standard NestJS response
-      if (content is Map && content.containsKey('data')) {
-        // PaginatedResponse format
-        list = content['data'] as List<dynamic>;
-      } else if (content is List) {
-        list = content;
-      } else if (data['products'] is List) {
-        list = data['products'] as List<dynamic>;
-      }
-    } else if (data is List) {
-      list = data;
+class PaginatedProducts {
+  final List<Product> items;
+  final int total;
+  final int totalPages;
+  final int currentPage;
+  final bool hasNextPage;
+
+  PaginatedProducts({
+    required this.items,
+    required this.total,
+    required this.totalPages,
+    required this.currentPage,
+    required this.hasNextPage,
+  });
+
+  factory PaginatedProducts.empty() => PaginatedProducts(
+    items: [],
+    total: 0,
+    totalPages: 0,
+    currentPage: 1,
+    hasNextPage: false,
+  );
+}
+
+/// Products Notifier to manage pagination state
+class ProductsNotifier extends StateNotifier<AsyncValue<PaginatedProducts>> {
+  final Ref ref;
+  final String queryStr;
+  int _currentPage = 1;
+  final int _pageSize = 20;
+  bool _hasMore = true;
+  bool _isFetching = false;
+  List<Product> _allProducts = [];
+
+  ProductsNotifier(this.ref, this.queryStr) : super(const AsyncValue.loading());
+
+  Future<void> fetchNextPage({bool isRefresh = false}) async {
+    if (_isFetching || (!_hasMore && !isRefresh)) return;
+
+    if (isRefresh) {
+      _currentPage = 1;
+      _hasMore = true;
+      _allProducts = [];
     }
-    return list.map((e) => Product.fromJson(e as Map<String, dynamic>)).toList();
-  } catch (e) {
-    debugPrint("Erreur chargement produits: $e");
-    return [];
+
+    _isFetching = true;
+
+    if (_currentPage == 1 && !isRefresh) {
+      state = const AsyncValue.loading();
+    }
+
+    final api = ref.read(apiClientProvider);
+    try {
+      final params = queryStr.isEmpty ? {} : Uri.splitQueryString(queryStr);
+      final response = await api.get('/shop/products', params: {
+        ...params,
+        'page': _currentPage,
+        'pageSize': params.containsKey('pageSize') ? int.tryParse(params['pageSize'].toString()) ?? _pageSize : _pageSize,
+      });
+
+      final data = response.data;
+      if (data is Map) {
+        final content = data['data']; 
+        if (content is Map && content.containsKey('data')) {
+          final newItems = (content['data'] as List).map((e) => Product.fromJson(e as Map<String, dynamic>)).toList();
+          final total = content['total'] ?? 0;
+          final totalPages = content['totalPages'] ?? 1;
+          
+          // Avoid duplicates by checking IDs
+          final existingIds = _allProducts.map((p) => p.id).toSet();
+          final uniqueNewItems = newItems.where((p) => !existingIds.contains(p.id)).toList();
+
+          _allProducts = isRefresh ? newItems : [..._allProducts, ...uniqueNewItems];
+          _hasMore = _currentPage < totalPages;
+          
+          if (uniqueNewItems.isNotEmpty || isRefresh) {
+            _currentPage++;
+          }
+
+          state = AsyncValue.data(PaginatedProducts(
+            items: _allProducts,
+            total: total,
+            totalPages: totalPages,
+            currentPage: _currentPage - 1,
+            hasNextPage: _hasMore,
+          ));
+        }
+      }
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    } finally {
+      _isFetching = false;
+    }
   }
+}
+
+final productsNotifierProvider = StateNotifierProvider.family<ProductsNotifier, AsyncValue<PaginatedProducts>, String>((ref, queryStr) {
+  final notifier = ProductsNotifier(ref, queryStr);
+  notifier.fetchNextPage();
+  return notifier;
+});
+
+/// Standard Products provider for backward compatibility
+final productsProvider = Provider.family<AsyncValue<List<Product>>, String>((ref, queryStr) {
+  return ref.watch(productsNotifierProvider(queryStr)).whenData((p) => p.items);
 });
 
 /// Single product provider
@@ -246,8 +325,15 @@ final loyaltyRewardsProvider = FutureProvider<List<LoyaltyReward>>((ref) async {
     final response = await api.get('/loyalty/rewards');
     final data = response.data;
     List<dynamic> list = [];
-    if (data is Map && data.containsKey('data')) {
-      list = data['data'] as List<dynamic>;
+    if (data is Map) {
+      final content = data['data'];
+      if (content is Map && content.containsKey('data')) {
+        list = content['data'] as List<dynamic>;
+      } else if (content is List) {
+        list = content;
+      } else {
+        list = (data['data'] ?? []) as List<dynamic>;
+      }
     } else if (data is List) {
       list = data;
     }
@@ -269,8 +355,15 @@ final loyaltyTransactionsProvider = FutureProvider<List<LoyaltyTransaction>>((re
     final response = await api.get('/loyalty/transactions', params: {'customerId': customerId});
     final data = response.data;
     List<dynamic> list = [];
-    if (data is Map && data.containsKey('data')) {
-      list = data['data'] as List<dynamic>;
+    if (data is Map) {
+      final content = data['data'];
+      if (content is Map && content.containsKey('data')) {
+        list = content['data'] as List<dynamic>;
+      } else if (content is List) {
+        list = content;
+      } else {
+        list = (data['data'] ?? []) as List<dynamic>;
+      }
     } else if (data is List) {
       list = data;
     }

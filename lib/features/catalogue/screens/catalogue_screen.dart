@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:nexaflow_mobile/core/api/shop_providers.dart';
 import 'package:nexaflow_mobile/core/models/models.dart';
 import 'package:nexaflow_mobile/core/widgets/shop_footer.dart';
-import 'package:nexaflow_mobile/features/cart/providers/cart_provider.dart';
 import 'package:nexaflow_mobile/features/compare/providers/compare_provider.dart';
+import 'package:nexaflow_mobile/core/widgets/product_card_premium.dart';
 
 class CatalogueScreen extends ConsumerStatefulWidget {
-  const CatalogueScreen({super.key});
+  final String? categoryId;
+  const CatalogueScreen({super.key, this.categoryId});
 
   @override
   ConsumerState<CatalogueScreen> createState() => _CatalogueScreenState();
@@ -18,59 +18,112 @@ class CatalogueScreen extends ConsumerStatefulWidget {
 
 class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
   final _searchCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
   String _search = '';
   String? _selectedCategoryId;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedCategoryId = widget.categoryId;
+    _scrollCtrl.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(CatalogueScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.categoryId != oldWidget.categoryId) {
+      setState(() {
+        _selectedCategoryId = widget.categoryId;
+      });
+    }
+  }
+
+  void _onScroll() {
+    if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 200) {
+      final params = _getParams();
+      final queryStr = Uri(queryParameters: params).query;
+      ref.read(productsNotifierProvider(queryStr).notifier).fetchNextPage();
+    }
+  }
+
+  Map<String, String> _getParams() {
+    return {
+      if (_search.isNotEmpty) 'search': _search,
+      if (_selectedCategoryId != null) 'categoryId': _selectedCategoryId!,
+    };
+  }
+
+  @override
   void dispose() {
     _searchCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final params = <String, String>{
-      if (_search.isNotEmpty) 'search': _search,
-      if (_selectedCategoryId != null) 'categoryId': _selectedCategoryId!,
-    };
+    final params = _getParams();
     final queryStr = Uri(queryParameters: params).query;
-    final productsAsync = ref.watch(productsProvider(queryStr));
+    final productsAsync = ref.watch(productsNotifierProvider(queryStr));
     final categoriesAsync = ref.watch(categoriesProvider);
     final compareList = ref.watch(compareProvider);
     final theme = Theme.of(context);
+    final primaryColor = const Color(0xFF6366F1);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Catalogue'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: 'Rechercher un produit...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _search.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          setState(() => _search = '');
-                        },
-                      )
-                    : null,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              ),
-              onChanged: (v) => setState(() => _search = v),
-            ),
-          ),
-        ),
-      ),
       body: Stack(
         children: [
-          CustomScrollView(
-            slivers: [
+          RefreshIndicator(
+            onRefresh: () async {
+              final params = _getParams();
+              final queryStr = Uri(queryParameters: params).query;
+              await ref.read(productsNotifierProvider(queryStr).notifier).fetchNextPage(isRefresh: true);
+            },
+            displacement: 100, // To avoid collision with potential top elements
+            child: CustomScrollView(
+              controller: _scrollCtrl,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+              // Custom Header
+              SliverAppBar(
+                pinned: true,
+                floating: true,
+                expandedHeight: 140,
+                backgroundColor: theme.scaffoldBackgroundColor,
+                elevation: 0,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        child: TextField(
+                          controller: _searchCtrl,
+                          onChanged: (v) => setState(() => _search = v),
+                          decoration: InputDecoration(
+                            hintText: 'Rechercher un produit...',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon: _search.isNotEmpty
+                                ? IconButton(icon: const Icon(Icons.close_rounded), onPressed: () {
+                                    _searchCtrl.clear();
+                                    setState(() => _search = '');
+                                  })
+                                : null,
+                            filled: true,
+                            fillColor: theme.brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                title: const Text('Catalogue', style: TextStyle(fontWeight: FontWeight.w900)),
+                centerTitle: false,
+              ),
+
               // Categories filter
               SliverToBoxAdapter(
                 child: categoriesAsync.when(
@@ -78,22 +131,60 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                     height: 50,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       itemCount: cats.length + 1,
                       separatorBuilder: (_, __) => const SizedBox(width: 8),
                       itemBuilder: (context, idx) {
-                        if (idx == 0) {
-                          return _CategoryChip(
-                            label: 'Tout',
-                            selected: _selectedCategoryId == null,
-                            onTap: () => setState(() => _selectedCategoryId = null),
-                          );
-                        }
-                        final cat = cats[idx - 1];
-                        return _CategoryChip(
-                          label: cat.name,
-                          selected: _selectedCategoryId == cat.id,
-                          onTap: () => setState(() => _selectedCategoryId = cat.id),
+                        final isSelected = idx == 0 ? _selectedCategoryId == null : _selectedCategoryId == cats[idx - 1].id;
+                        final label = idx == 0 ? 'Tout' : cats[idx - 1].name;
+                        
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedCategoryId = idx == 0 ? null : cats[idx - 1].id),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isSelected ? primaryColor : (theme.brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.white),
+                              borderRadius: BorderRadius.circular(50),
+                              border: Border.all(color: isSelected ? primaryColor : Colors.grey.shade200),
+                              boxShadow: isSelected ? [BoxShadow(color: primaryColor.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))] : [],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (idx > 0 && cats[idx - 1].image != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8),
+                                    child: Container(
+                                      width: 20,
+                                      height: 20,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        image: DecorationImage(
+                                          image: NetworkImage(cats[idx - 1].image!),
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else if (idx > 0)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 8),
+                                    child: Icon(Icons.category_outlined, size: 14, color: Colors.grey),
+                                  ),
+                                Center(
+                                  child: Text(
+                                    label,
+                                    style: TextStyle(
+                                      color: isSelected ? Colors.white : (theme.brightness == Brightness.dark ? Colors.white70 : Colors.grey.shade700),
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         );
                       },
                     ),
@@ -102,68 +193,116 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
                   error: (_, __) => const SizedBox(height: 50),
                 ),
               ),
+
               // Products grid
               productsAsync.when(
-                data: (products) => products.isEmpty
-                    ? const SliverFillRemaining(child: Center(child: Text('Aucun produit trouvé')))
-                    : SliverPadding(
-                        padding: const EdgeInsets.all(16),
+                data: (paginated) {
+                  final products = paginated.items;
+                  if (products.isEmpty) {
+                    return SliverFillRemaining(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off_rounded, size: 64, color: Colors.grey.shade300),
+                            const SizedBox(height: 16),
+                            const Text('Aucun produit trouvé', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return SliverMainAxisGroup(
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.all(20),
                         sliver: SliverGrid(
                           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
                             childAspectRatio: 0.65,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 20,
+                            mainAxisSpacing: 24,
                           ),
                           delegate: SliverChildBuilderDelegate(
-                            (context, idx) => _ProductCard(product: products[idx]),
+                            (context, idx) => ProductCardPremium(product: products[idx]),
                             childCount: products.length,
                           ),
                         ),
                       ),
-                loading: () => SliverToBoxAdapter(child: _buildSkeleton()),
+                      if (paginated.hasNextPage)
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+                loading: () => SliverPadding(
+                  padding: const EdgeInsets.all(20),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2, childAspectRatio: 0.65, crossAxisSpacing: 20, mainAxisSpacing: 24,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, idx) => _buildSkeleton(),
+                      childCount: 6,
+                    ),
+                  ),
+                ),
                 error: (e, _) => SliverFillRemaining(child: Center(child: Text('Erreur: $e'))),
               ),
+
               // Footer
-              const SliverToBoxAdapter(child: ShopFooter()),
+              // const SliverToBoxAdapter(child: ShopFooter()),
+              const SliverToBoxAdapter(child: SizedBox(height: 100)), // Space for compare bar
             ],
           ),
+        ),
+
+          // Comparison Bar
           if (compareList.isNotEmpty)
             Positioned(
-              left: 16,
-              right: 16,
-              bottom: 16,
+              left: 20, right: 20, bottom: 20,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1), // primaryColor
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 5)),
-                  ],
+                  gradient: LinearGradient(colors: [primaryColor, primaryColor.withOpacity(0.8)]),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [BoxShadow(color: primaryColor.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))],
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '${compareList.length} produit(s) à comparer',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                      child: const Icon(Icons.compare_arrows_rounded, color: Colors.white),
                     ),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => ref.read(compareProvider.notifier).clearGroup(),
-                          child: const Text('Vider', style: TextStyle(color: Colors.white70)),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => context.push('/compare'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF6366F1),
-                          ),
-                          child: const Text('Comparer'),
-                        ),
-                      ],
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('${compareList.length} produit${compareList.length > 1 ? 's' : ''}', 
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+                          const Text('à comparer', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => ref.read(compareProvider.notifier).clearGroup(),
+                      child: const Text('Vider', style: TextStyle(color: Colors.white70)),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => context.push('/compare'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white, foregroundColor: primaryColor,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        minimumSize: const Size(0, 40),
+                      ),
+                      child: const Text('Comparer', style: TextStyle(fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -174,156 +313,14 @@ class _CatalogueScreenState extends ConsumerState<CatalogueScreen> {
     );
   }
 
-  Widget _buildSkeleton() => Padding(
-    padding: const EdgeInsets.all(16),
-    child: GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, childAspectRatio: 0.65, crossAxisSpacing: 12, mainAxisSpacing: 12,
-      ),
-      itemCount: 6,
-      itemBuilder: (_, __) => Shimmer.fromColors(
-        baseColor: Colors.grey.shade200,
-        highlightColor: Colors.grey.shade100,
-        child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20))),
-      ),
-    ),
-  );
-}
-
-class _CategoryChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _CategoryChip({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+  Widget _buildSkeleton() => Shimmer.fromColors(
+    baseColor: Colors.grey.shade200,
+    highlightColor: Colors.grey.shade100,
+    child: Container(
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFF6366F1) : Colors.transparent,
-        border: Border.all(color: selected ? const Color(0xFF6366F1) : Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(50),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: selected ? Colors.white : Colors.grey.shade700,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-          fontSize: 13,
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
       ),
     ),
   );
-}
-
-class _ProductCard extends ConsumerWidget {
-  final Product product;
-  const _ProductCard({required this.product});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final inCompare = ref.watch(compareProvider.notifier).isSelected(product.id);
-    
-    return GestureDetector(
-      onTap: () => context.push('/product/${product.id}'),
-      child: Card(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image with Compare Overlay
-            Expanded(
-              child: Stack(
-                children: [
-                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                    child: product.mainImage != null
-                        ? CachedNetworkImage(
-                            imageUrl: product.mainImage!,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => Shimmer.fromColors(
-                              baseColor: Colors.grey.shade200,
-                              highlightColor: Colors.grey.shade100,
-                              child: Container(color: Colors.white),
-                            ),
-                            errorWidget: (_, __, ___) => Container(
-                              color: const Color(0xFFF1F5F9),
-                              child: const Icon(Icons.image_outlined, color: Colors.grey, size: 40),
-                            ),
-                          )
-                        : Container(
-                            color: const Color(0xFFF1F5F9),
-                            child: const Icon(Icons.image_outlined, color: Colors.grey, size: 40),
-                          ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: GestureDetector(
-                      onTap: () {
-                         ref.read(compareProvider.notifier).toggleProduct(product);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
-                          shape: BoxShape.circle,
-                          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-                        ),
-                        child: Icon(
-                          Icons.compare_arrows_rounded,
-                          size: 16,
-                          color: inCompare ? const Color(0xFF6366F1) : Colors.grey,
-                        ),
-                      ),
-                    ),
-                  )
-                ],
-              ),
-            ),
-            // Info
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(product.name, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('${product.price.toStringAsFixed(0)} F', style: const TextStyle(color: Color(0xFF6366F1), fontWeight: FontWeight.w700)),
-                      GestureDetector(
-                        onTap: () {
-                          ref.read(cartProvider.notifier).addProduct(product);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('${product.name} ajouté ✓'), duration: const Duration(seconds: 1)),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6366F1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.add, color: Colors.white, size: 16),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

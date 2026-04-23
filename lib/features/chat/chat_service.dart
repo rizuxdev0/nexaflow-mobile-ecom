@@ -66,7 +66,9 @@ class ChatAttachment {
 class ChatService {
   IO.Socket? _socket;
   final _storage = const FlutterSecureStorage();
-  final _apiClient = ApiClient();
+  final ApiClient _apiClient;
+  
+  ChatService(this._apiClient);
   
   final _messageController = StreamController<ChatMessage>.broadcast();
   Stream<ChatMessage> get messagesStream => _messageController.stream;

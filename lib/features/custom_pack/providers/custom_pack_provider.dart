@@ -58,13 +58,21 @@ final customPackDraftProvider = StateNotifierProvider<CustomPackDraftNotifier, L
   return CustomPackDraftNotifier();
 });
 
+final customPackConfigProvider = FutureProvider<CustomPackConfig>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  final response = await api.get('/custom-packs/config');
+  return CustomPackConfig.fromJson(response.data as Map<String, dynamic>);
+});
+
 class PackHistoryNotifier extends StateNotifier<AsyncValue<List<CustomPackRequest>>> {
   final ApiClient _api;
   final String? _customerId;
   final String? _customerName;
   final String? _customerEmail;
 
-  PackHistoryNotifier(this._api, this._customerId, this._customerName, this._customerEmail) : super(const AsyncValue.loading()) {
+  final Ref _ref;
+
+  PackHistoryNotifier(this._api, this._customerId, this._customerName, this._customerEmail, this._ref) : super(const AsyncValue.loading()) {
     if (_customerId != null) {
       fetchHistory();
     }
@@ -95,10 +103,24 @@ class PackHistoryNotifier extends StateNotifier<AsyncValue<List<CustomPackReques
       double originalTotal = draftItems.fold(0, (sum, item) => sum + (item.product.price * item.quantity));
       int totalItems = draftItems.fold<int>(0, (sum, item) => sum + item.quantity);
       
+      // Calculate discount based on fetched config
+      final configAsync = _ref.read(customPackConfigProvider);
+      
       String discountType = 'percentage';
       double discountValue = 0;
-      if (totalItems >= 4) discountValue = 10;
-      else if (totalItems >= 2) discountValue = 5;
+
+      if (configAsync.hasValue) {
+        final config = configAsync.value!;
+        // Sort tiers by minProducts descending to find the best match
+        final tiers = [...config.discountTiers]..sort((a, b) => b.minProducts.compareTo(a.minProducts));
+        for (final tier in tiers) {
+          if (totalItems >= tier.minProducts) {
+            discountType = tier.discountType;
+            discountValue = tier.discountValue;
+            break;
+          }
+        }
+      }
 
       double discountedTotal = originalTotal;
       if (discountType == 'percentage') {
@@ -143,6 +165,7 @@ final packHistoryProvider = StateNotifierProvider<PackHistoryNotifier, AsyncValu
     api, 
     auth.customer?.id, 
     auth.customer?.fullName, 
-    auth.customer?.email
+    auth.customer?.email,
+    ref
   );
 });

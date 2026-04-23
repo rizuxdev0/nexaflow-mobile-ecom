@@ -13,6 +13,7 @@ import '../../features/splash/screens/splash_screen.dart';
 import '../../features/compare/screens/compare_screen.dart';
 import '../../features/custom_pack/screens/custom_pack_screen.dart';
 import '../../features/custom_pack/screens/pack_history_screen.dart';
+import '../../features/custom_pack/screens/pack_detail_screen.dart';
 import '../../features/checkout/screens/checkout_screen.dart';
 import '../../features/wishlist/screens/wishlist_screen.dart';
 import '../../features/returns/screens/returns_history_screen.dart';
@@ -39,7 +40,7 @@ GoRouter buildRouter(WidgetRef ref) {
       final auth = ref.read(authProvider);
       if (auth.isLoading) return null;
       // Protected routes
-      final protectedPaths = ['/checkout', '/compte', '/commandes', '/chat', '/custom-pack', '/pack-history', '/returns', '/become-vendor', '/subscription/checkout', '/notifications', '/edit-profile'];
+      final protectedPaths = ['/checkout', '/compte', '/commandes', '/chat', '/pack-history', '/returns', '/become-vendor', '/subscription/checkout', '/notifications', '/edit-profile'];
       final isProtected = protectedPaths.any((p) => state.matchedLocation.startsWith(p));
       if (isProtected && !auth.isAuthenticated) return '/connexion';
       return null;
@@ -53,7 +54,7 @@ GoRouter buildRouter(WidgetRef ref) {
         ),
         routes: [
           GoRoute(path: '/', builder: (_, __) => const HomeScreen()),
-          GoRoute(path: '/catalogue', builder: (_, __) => const CatalogueScreen()),
+          GoRoute(path: '/catalogue', builder: (_, state) => CatalogueScreen(categoryId: state.uri.queryParameters['categoryId'])),
           GoRoute(path: '/cart', builder: (_, __) => const CartScreen()),
           GoRoute(path: '/chat', builder: (_, __) => const ChatScreen()),
           GoRoute(path: '/compte', builder: (_, __) => const AccountScreen()),
@@ -73,6 +74,7 @@ GoRouter buildRouter(WidgetRef ref) {
       GoRoute(path: '/compare', builder: (_, __) => const CompareScreen()),
       GoRoute(path: '/custom-pack', builder: (_, __) => const CustomPackScreen()),
       GoRoute(path: '/pack-history', builder: (_, __) => const PackHistoryScreen()),
+      GoRoute(path: '/pack-detail/:id', builder: (_, state) => PackDetailScreen(pack: state.extra as CustomPackRequest)),
       GoRoute(path: '/become-vendor', builder: (_, __) => const BecomeVendorScreen()),
       GoRoute(path: '/pricing', builder: (_, __) => const PricingScreen()),
       GoRoute(

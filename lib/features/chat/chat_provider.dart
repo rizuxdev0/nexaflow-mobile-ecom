@@ -5,7 +5,11 @@ import 'package:nexaflow_mobile/features/auth/providers/auth_provider.dart';
 import 'package:nexaflow_mobile/core/services/notification_service.dart';
 import 'package:nexaflow_mobile/features/settings/settings_provider.dart';
 
-final chatServiceProvider = Provider((ref) => ChatService());
+import 'package:nexaflow_mobile/core/api/api_client.dart';
+
+final chatServiceProvider = Provider((ref) {
+  return ChatService(ref.watch(apiClientProvider));
+});
 
 final chatMessagesProvider = StateNotifierProvider<ChatMessagesNotifier, List<ChatMessage>>((ref) {
   final service = ref.watch(chatServiceProvider);

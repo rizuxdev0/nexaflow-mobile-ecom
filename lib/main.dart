@@ -55,7 +55,7 @@ class _NexaFlowAppState extends ConsumerState<NexaFlowApp> {
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
     return MaterialApp.router(
-      title: 'NexaFlow',
+      title: 'Nexaflow Ecom',
       debugShowCheckedModeBanner: false,
 
       // Themes

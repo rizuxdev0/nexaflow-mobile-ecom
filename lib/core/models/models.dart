@@ -379,13 +379,17 @@ class BannerModel {
 class StoreConfig {
   final Map<String, dynamic> appearance;
   final Map<String, dynamic> identity;
+  final Map<String, dynamic> checkout;
   
   const StoreConfig({
     required this.appearance,
     required this.identity,
+    required this.checkout,
   });
 
   int get heroSlideDuration => _safeParseInt(appearance['heroSlideDuration'], defaultValue: 5);
+
+  List<dynamic> get paymentMethods => (checkout['paymentMethods'] as List<dynamic>?) ?? [];
 
   factory StoreConfig.fromJson(Map<String, dynamic> json) {
     // If it's wrapped in { data: ... }
@@ -393,6 +397,7 @@ class StoreConfig {
     return StoreConfig(
       appearance: (data['appearance'] as Map<String, dynamic>?) ?? {},
       identity: (data['identity'] as Map<String, dynamic>?) ?? {},
+      checkout: (data['checkout'] as Map<String, dynamic>?) ?? {},
     );
   }
 }
@@ -507,5 +512,53 @@ class CustomPackRequestItem {
     sku: json['sku'] as String? ?? '',
     quantity: _safeParseInt(json['quantity'], defaultValue: 1),
     unitPrice: _safeParseDouble(json['unitPrice']),
+  );
+}
+
+class CustomPackConfig {
+  final bool enabled;
+  final int minProducts;
+  final int maxProducts;
+  final bool requiresApproval;
+  final List<DiscountTier> discountTiers;
+
+  const CustomPackConfig({
+    required this.enabled,
+    required this.minProducts,
+    required this.maxProducts,
+    required this.requiresApproval,
+    required this.discountTiers,
+  });
+
+  factory CustomPackConfig.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] ?? json;
+    return CustomPackConfig(
+      enabled: data['enabled'] as bool? ?? true,
+      minProducts: _safeParseInt(data['minProducts'], defaultValue: 3),
+      maxProducts: _safeParseInt(data['maxProducts'], defaultValue: 10),
+      requiresApproval: data['requiresApproval'] as bool? ?? true,
+      discountTiers: (data['discountTiers'] as List<dynamic>?)
+              ?.map((e) => DiscountTier.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
+}
+
+class DiscountTier {
+  final int minProducts;
+  final String discountType;
+  final double discountValue;
+
+  const DiscountTier({
+    required this.minProducts,
+    required this.discountType,
+    required this.discountValue,
+  });
+
+  factory DiscountTier.fromJson(Map<String, dynamic> json) => DiscountTier(
+    minProducts: _safeParseInt(json['minProducts']),
+    discountType: json['discountType'] as String? ?? 'percentage',
+    discountValue: _safeParseDouble(json['discountValue']),
   );
 }

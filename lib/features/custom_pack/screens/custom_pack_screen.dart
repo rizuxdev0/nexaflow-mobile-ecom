@@ -1,29 +1,78 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 import '../providers/custom_pack_provider.dart';
+import 'package:nexaflow_mobile/features/auth/providers/auth_provider.dart';
 
-class CustomPackScreen extends ConsumerWidget {
+class CustomPackScreen extends ConsumerStatefulWidget {
   const CustomPackScreen({super.key});
+
+  @override
+  ConsumerState<CustomPackScreen> createState() => _CustomPackScreenState();
+}
+
+class _CustomPackScreenState extends ConsumerState<CustomPackScreen> {
+  final TextEditingController _noteController = TextEditingController();
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
 
   String _formatAmount(double amount) {
     return NumberFormat.currency(locale: 'fr_FR', symbol: 'FCFA', decimalDigits: 0).format(amount);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final draftItems = ref.watch(customPackDraftProvider);
     final theme = Theme.of(context);
     final primaryColor = const Color(0xFF6366F1);
 
-    // Calculate totals directly just for display purposes
+    // Calculate totals based on real config
+    final configAsync = ref.watch(customPackConfigProvider);
     double totalPrice = draftItems.fold(0, (sum, item) => sum + (item.product.price * item.quantity));
     final totalItems = draftItems.fold<int>(0, (sum, item) => sum + item.quantity);
+    
+    String discountType = 'percentage';
+    double discountValue = 0;
+    String bannerMessage = 'Ajoutez des articles pour obtenir une réduction.';
+    
+    if (configAsync.hasValue) {
+      final config = configAsync.value!;
+      final tiers = [...config.discountTiers]..sort((a, b) => b.minProducts.compareTo(a.minProducts));
+      
+      for (final tier in tiers) {
+        if (totalItems >= tier.minProducts) {
+          discountType = tier.discountType;
+          discountValue = tier.discountValue;
+          break;
+        }
+      }
+      
+      final upcomingTiers = config.discountTiers.where((t) => t.minProducts > totalItems).toList()
+        ..sort((a, b) => a.minProducts.compareTo(b.minProducts));
+        
+      if (upcomingTiers.isNotEmpty) {
+        final next = upcomingTiers.first;
+        final remaining = next.minProducts - totalItems;
+        if (discountValue > 0) {
+          bannerMessage = 'Super ! Vous avez ${discountValue.toInt()}${(discountType == 'percentage' ? '%' : ' FCFA')} de réduction. Ajoutez $remaining article(s) pour passer à ${next.discountValue.toInt()}${(next.discountType == 'percentage' ? '%' : ' FCFA')} !';
+        } else {
+          bannerMessage = 'Ajoutez encore $remaining article(s) pour obtenir ${next.discountValue.toInt()}${(next.discountType == 'percentage' ? '%' : ' FCFA')} de réduction !';
+        }
+      } else if (discountValue > 0) {
+        bannerMessage = 'Félicitations ! Vous bénéficiez de la réduction maximale de ${discountValue.toInt()}${(discountType == 'percentage' ? '%' : ' FCFA')}.';
+      }
+    }
+
     double discountAmount = 0;
-    if (totalItems >= 4) {
-      discountAmount = totalPrice * 0.10;
-    } else if (totalItems >= 2) {
-      discountAmount = totalPrice * 0.05;
+    if (discountType == 'percentage') {
+      discountAmount = totalPrice * (discountValue / 100);
+    } else {
+      discountAmount = discountValue;
     }
     double finalPrice = totalPrice - discountAmount;
 
@@ -58,7 +107,6 @@ class CustomPackScreen extends ConsumerWidget {
             )
           : Column(
               children: [
-                // Top Banner
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -69,9 +117,7 @@ class CustomPackScreen extends ConsumerWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          totalItems >= 4 ? 'Super ! Vous bénéficiez de 10% de réduction.' :
-                          totalItems >= 2 ? 'Ajoutez ${4 - totalItems} article(s) pour avoir 10% de réduction. Vous avez 5% !' :
-                          'Ajoutez encore 1 article pour obtenir 5% de réduction.',
+                          bannerMessage,
                           style: TextStyle(color: primaryColor, fontWeight: FontWeight.w600, fontSize: 13),
                         ),
                       ),
@@ -95,8 +141,7 @@ class CustomPackScreen extends ConsumerWidget {
                         child: Row(
                           children: [
                             Container(
-                              height: 60,
-                              width: 60,
+                              height: 60, width: 60,
                               decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
                               child: item.product.mainImage != null
                                   ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(item.product.mainImage!, fit: BoxFit.cover))
@@ -132,6 +177,32 @@ class CustomPackScreen extends ConsumerWidget {
                     },
                   ),
                 ),
+                
+                // Note field
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Note ou Motif (Optionnel)', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _noteController,
+                        maxLines: 2,
+                        decoration: InputDecoration(
+                          hintText: 'Ex: Pour un cadeau d\'anniversaire, pack spécial...',
+                          hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
+                          contentPadding: const EdgeInsets.all(12),
+                          filled: true,
+                          fillColor: theme.brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 // Bottom Checkout Bar
                 Container(
                   padding: const EdgeInsets.all(24),
@@ -173,12 +244,27 @@ class CustomPackScreen extends ConsumerWidget {
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: () async {
-                              final success = await ref.read(packHistoryProvider.notifier).submitRequest(draftItems);
+                              final auth = ref.read(authProvider);
+                              if (!auth.isAuthenticated) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Veuillez vous connecter pour soumettre votre pack.')));
+                                context.push('/connexion');
+                                return;
+                              }
+
+                              if (configAsync.hasValue) {
+                                final minRequired = configAsync.value!.minProducts;
+                                if (totalItems < minRequired) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Votre pack doit contenir au moins $minRequired articles.'), backgroundColor: Colors.orange.shade800));
+                                  return;
+                                }
+                              }
+                              
+                              final success = await ref.read(packHistoryProvider.notifier).submitRequest(draftItems, note: _noteController.text);
                               if (success) {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demande de pack envoyée avec succès !')));
                                   ref.read(customPackDraftProvider.notifier).clearPack();
-                                  Navigator.pop(context); // Go back after success
+                                  Navigator.pop(context);
                                 }
                               } else {
                                 if (context.mounted) {
@@ -187,12 +273,18 @@ class CustomPackScreen extends ConsumerWidget {
                               }
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryColor,
-                              foregroundColor: Colors.white,
+                              backgroundColor: primaryColor, foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50)),
                             ),
-                            child: const Text('Soumettre ma Demande', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            child: Builder(
+                              builder: (context) {
+                                int minReq = 3;
+                                if (configAsync.hasValue) minReq = configAsync.value!.minProducts;
+                                if (totalItems < minReq) return Text('Encore ${minReq - totalItems} article${minReq - totalItems > 1 ? 's' : ''} requis', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16));
+                                return const Text('Soumettre ma Demande', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16));
+                              }
+                            ),
                           ),
                         ),
                       ],

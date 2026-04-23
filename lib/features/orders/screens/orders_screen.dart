@@ -209,6 +209,7 @@ class _OrderList extends StatelessWidget {
     if (orders.isEmpty) return _EmptyTab(tabKey: tabKey);
 
     return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
       itemCount: orders.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -359,40 +360,51 @@ class _EmptyTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAll = tabKey == 'all';
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
             Container(
-              width: 80, height: 80,
-              decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withOpacity(0.08),
-                shape: BoxShape.circle,
+              height: constraints.maxHeight,
+              alignment: Alignment.center,
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 80, height: 80,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6366F1).withOpacity(0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isAll ? Icons.receipt_long_outlined : Icons.inbox_outlined,
+                        size: 38, color: const Color(0xFF6366F1).withOpacity(0.5),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      isAll ? 'Aucune commande' : 'Aucune commande dans cet onglet',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      isAll
+                          ? 'Vos commandes apparaîtront ici dès que vous aurez effectué un achat.'
+                          : 'Vous n\'avez pas de commandes avec ce statut pour le moment.',
+                      style: const TextStyle(color: Colors.grey, fontSize: 13, height: 1.5),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
-              child: Icon(
-                isAll ? Icons.receipt_long_outlined : Icons.inbox_outlined,
-                size: 38, color: const Color(0xFF6366F1).withOpacity(0.5),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              isAll ? 'Aucune commande' : 'Aucune commande dans cet onglet',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              isAll
-                  ? 'Vos commandes apparaîtront ici dès que vous aurez effectué un achat.'
-                  : 'Vous n\'avez pas de commandes avec ce statut pour le moment.',
-              style: const TextStyle(color: Colors.grey, fontSize: 13, height: 1.5),
-              textAlign: TextAlign.center,
             ),
           ],
-        ),
-      ),
+        );
+      }
     );
   }
 }

@@ -6,7 +6,7 @@ import '../models/returns.dart';
 import '../../features/auth/providers/auth_provider.dart';
 
 final returnHistoryProvider = FutureProvider<List<ProductReturn>>((ref) async {
-  final api = ApiClient();
+  final api = ref.watch(apiClientProvider);
   final auth = ref.watch(authProvider);
   final customerId = auth.customer?.id;
   
@@ -37,7 +37,8 @@ final returnHistoryProvider = FutureProvider<List<ProductReturn>>((ref) async {
 });
 
 class ReturnRequestService {
-  final ApiClient _api = ApiClient();
+  final ApiClient _api;
+  ReturnRequestService(this._api);
 
   Future<ProductReturn> createReturn({
     required String orderId,
@@ -86,4 +87,6 @@ class ReturnRequestService {
   }
 }
 
-final returnRequestServiceProvider = Provider((ref) => ReturnRequestService());
+final returnRequestServiceProvider = Provider((ref) {
+  return ReturnRequestService(ref.watch(apiClientProvider));
+});

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/cart/providers/cart_provider.dart';
+import 'core/api/global_message_provider.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -57,6 +58,33 @@ class _MainShellState extends ConsumerState<MainShell> {
     final _currentIndex = _calculateSelectedIndex(widget.location);
     final cartCount = ref.watch(cartProvider).itemCount;
     final theme = Theme.of(context);
+
+    // Listen for global error messages (timeouts, connection issues)
+    ref.listen<GlobalMessage?>(globalMessageProvider, (previous, next) {
+      if (next != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  next.isError ? Icons.error_outline : Icons.check_circle_outline,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(next.message)),
+              ],
+            ),
+            backgroundColor: next.isError ? Colors.red.shade700 : Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        // Clear the state after showing
+        Future.microtask(() => ref.read(globalMessageProvider.notifier).state = null);
+      }
+    });
 
     return Scaffold(
       body: widget.child,
